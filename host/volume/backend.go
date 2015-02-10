@@ -3,6 +3,7 @@ package volume
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 )
 
 /*
@@ -19,6 +20,8 @@ type Provider interface {
 	DestroyVolume(Volume) error
 	CreateSnapshot(Volume) (Volume, error)
 	ForkVolume(Volume) (Volume, error)
+	SendSnapshot(Volume, io.Writer) error
+	ReceiveSnapshot(io.Reader) (Volume, error)
 
 	MarshalGlobalState() (json.RawMessage, error)
 	MarshalVolumeState(volumeID string) (json.RawMessage, error)

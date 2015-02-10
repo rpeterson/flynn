@@ -3,6 +3,7 @@ package zfs
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -190,18 +191,23 @@ func (b *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
-	// mount the snapshot (readonly)
-	// 'zfs mount' currently can't perform on snapshots; seealso https://github.com/zfsonlinux/zfs/issues/173
-	os.MkdirAll(v2.basemount, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("could not mount snapshot: %s", err)
-	}
-	err = exec.Command("mount", "-tzfs", v2.dataset.Name, v2.basemount).Run()
-	if err != nil {
-		return nil, fmt.Errorf("could not mount snapshot: %s", err)
+	if err := b.mountSnapshot(v2); err != nil {
+		return nil, err
 	}
 	b.volumes[id] = v2
 	return v2, nil
+}
+
+func (b *Provider) mountSnapshot(vol *zfsVolume) error {
+	// mount the snapshot (readonly)
+	// 'zfs mount' currently can't perform on snapshots; seealso https://github.com/zfsonlinux/zfs/issues/173
+	if err := os.MkdirAll(vol.basemount, 0644); err != nil {
+		return fmt.Errorf("could not mount snapshot: %s", err)
+	}
+	if err := exec.Command("mount", "-tzfs", vol.dataset.Name, vol.basemount).Run(); err != nil {
+		return fmt.Errorf("could not mount snapshot: %s", err)
+	}
+	return nil
 }
 
 func (b *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
@@ -227,6 +233,36 @@ func (b *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
 	}
 	b.volumes[id] = v2
 	return v2, nil
+}
+
+func (b *Provider) SendSnapshot(vol volume.Volume, output io.Writer) error {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return err
+	}
+	if !vol.IsSnapshot() {
+		return fmt.Errorf("can only send a snapshot")
+	}
+	return zvol.dataset.SendSnapshot(output)
+}
+
+func (b *Provider) ReceiveSnapshot(input io.Reader) (volume.Volume, error) {
+	id := random.UUID()
+	v := &zfsVolume{
+		info:      &volume.Info{ID: id},
+		provider:  b,
+		basemount: b.mountPath(id),
+	}
+	var err error
+	v.dataset, err = zfs.ReceiveSnapshot(input, path.Join(b.dataset.Name, id)+"@"+id)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.mountSnapshot(v); err != nil {
+		return nil, err
+	}
+	b.volumes[id] = v
+	return v, nil
 }
 
 func (v *zfsVolume) Provider() volume.Provider {
