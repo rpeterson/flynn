@@ -3,11 +3,11 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"net"
 	"os"
 	"sync"
 
+	"github.com/flynn/flynn/logaggregator/ring"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
@@ -38,6 +38,8 @@ type Aggregator struct {
 	// Addr is the address (host:port) to listen on for incoming syslog messages.
 	Addr string
 
+	bmu          sync.Mutex // protects buffers
+	buffers      map[string]*ring.Buffer
 	listener     net.Listener
 	logc         chan []byte
 	numConsumers int
@@ -52,6 +54,7 @@ type Aggregator struct {
 func NewAggregator(addr string) *Aggregator {
 	return &Aggregator{
 		Addr:         "127.0.0.1:0",
+		buffers:      make(map[string]*ring.Buffer),
 		logc:         make(chan []byte),
 		numConsumers: 10,
 		shutdown:     make(chan struct{}),
@@ -123,19 +126,29 @@ var afterMessage func()
 func (a *Aggregator) consumeLogs() {
 	for line := range a.logc {
 		// TODO: forward message to follower aggregator
-		// TODO: parse the message, send it to the right bucket
-		fmt.Printf("message received: %q\n", string(line))
 		msg, err := rfc5424.Parse(line)
 		if err != nil {
 			log15.Error("rfc5424 parse error", "err", err)
 			continue
 		}
-		fmt.Printf("MSG: %#v\n", msg)
+		a.getBuffer(string(msg.AppName)).Add(msg)
 
 		if afterMessage != nil {
 			afterMessage()
 		}
 	}
+}
+
+func (a *Aggregator) getBuffer(id string) *ring.Buffer {
+	a.bmu.Lock()
+	defer a.bmu.Unlock()
+
+	if buf, ok := a.buffers[id]; ok {
+		return buf
+	}
+	buf := ring.NewBuffer()
+	a.buffers[id] = buf
+	return buf
 }
 
 func (a *Aggregator) readLogsFromConn(conn net.Conn) {
