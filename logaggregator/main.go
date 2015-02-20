@@ -9,7 +9,10 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 func main() {
@@ -122,6 +125,13 @@ func (a *Aggregator) consumeLogs() {
 		// TODO: forward message to follower aggregator
 		// TODO: parse the message, send it to the right bucket
 		fmt.Printf("message received: %q\n", string(line))
+		msg, err := rfc5424.Parse(line)
+		if err != nil {
+			log15.Error("rfc5424 parse error", "err", err)
+			continue
+		}
+		fmt.Printf("MSG: %#v\n", msg)
+
 		if afterMessage != nil {
 			afterMessage()
 		}
