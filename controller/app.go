@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
@@ -242,4 +244,39 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 		return
 	}
 	httphelper.JSON(rw, 200, app)
+}
+
+func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	lines, _ := strconv.Atoi(req.FormValue("lines"))
+	follow := req.FormValue("follow") == "true"
+	// TODO(bgentry): support wait, filtering by fields like process type/ID.
+	// wait := req.FormValue("wait") == "true"
+
+	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), lines, follow)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			<-cn.CloseNotify()
+			rc.Close()
+		}()
+	} else {
+		defer rc.Close()
+	}
+
+	// TODO(bgentry): use SSE, distinguish between streams like JobLog.
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(200)
+	// Send headers right away if following
+	if wf, ok := w.(http.Flusher); ok && follow {
+		wf.Flush()
+	}
+
+	fw := httphelper.FlushWriter{Writer: w, Enabled: follow}
+	io.Copy(fw, rc)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
@@ -66,8 +67,20 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
+	lc, err := logaggc.New("")
+	if err != nil {
+		c.Fatal(err)
+	}
+
 	s.cc = tu.NewFakeCluster()
-	s.hc = handlerConfig{db: pg, cc: s.cc, rc: newFakeRouter(), pgxpool: pgxpool, key: authKey}
+	s.hc = handlerConfig{
+		db:      pg,
+		cc:      s.cc,
+		lc:      *lc,
+		rc:      newFakeRouter(),
+		pgxpool: pgxpool,
+		key:     authKey,
+	}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 	client, err := controller.NewClient(s.srv.URL, authKey)
