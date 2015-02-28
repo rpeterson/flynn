@@ -23,6 +23,7 @@
           "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
           "cmd": ["postgres"],
+          "service": "postgres",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
           },
@@ -30,7 +31,8 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"]
+          "cmd": ["api"],
+          "service": "postgres-api"
         }
       }
     },
@@ -133,7 +135,8 @@
     "from_step": "postgres",
     "app": {
       "name": "postgres",
-      "meta": {"flynn-system-app": "true"}
+      "meta": {"flynn-system-app": "true"},
+      "strategy": "postgres"
     }
   },
   {
