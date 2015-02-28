@@ -17,7 +17,7 @@
     "release": {
       "env": {
         "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}"
-	  },
+      },
       "processes": {
         "postgres": {
           "ports": [{"port": 5432, "proto": "tcp"}],
