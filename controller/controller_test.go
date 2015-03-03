@@ -34,6 +34,7 @@ type S struct {
 	srv *httptest.Server
 	hc  handlerConfig
 	c   *controller.Client
+	fla *httptest.Server
 }
 
 var _ = Suite(&S{})
@@ -67,7 +68,8 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
-	lc, err := logaggc.New("")
+	s.fla = newFakeLogAggregator()
+	lc, err := logaggc.New(s.fla.URL)
 	if err != nil {
 		c.Fatal(err)
 	}
@@ -86,6 +88,10 @@ func (s *S) SetUpSuite(c *C) {
 	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)
 	s.c = client
+}
+
+func (s *S) TearDownSuite(c *C) {
+	s.fla.Close()
 }
 
 func (s *S) TestBadAuth(c *C) {
