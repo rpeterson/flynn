@@ -37,11 +37,6 @@ func runLog(args *docopt.Args, client *controller.Client) error {
 	}
 	defer rc.Close()
 
-	var stderr io.Writer = os.Stdout
-	if args.Bool["--split-stderr"] {
-		stderr = os.Stderr
-	}
-
 	// TODO: don't want to copy raw bytes to stdout, want to deserialize the
 	// logaggregator client.Message structs and print the message portion with
 	// some Heroku-like display logic.
