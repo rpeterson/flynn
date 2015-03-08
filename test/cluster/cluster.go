@@ -440,6 +440,7 @@ git merge origin/master
 {{ end }}
 
 docker pull flynn/busybox
+test/scripts/wait-for-docker
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
